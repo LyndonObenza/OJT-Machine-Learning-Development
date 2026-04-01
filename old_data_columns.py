@@ -61,13 +61,18 @@ avgo_df  = get_tradingview_data("AVGO",  "NASDAQ", Interval.in_daily)
 meta_df  = get_tradingview_data("META",  "NASDAQ", Interval.in_daily)
 orcl_df  = get_tradingview_data("ORCL",  "NYSE",   Interval.in_daily)
 ibm_df   = get_tradingview_data("IBM",   "NYSE",   Interval.in_daily)
+ttzz_df  = get_tradingview_data("2300",  "TADAWUL",    Interval.in_daily)
+eoez_df  = get_tradingview_data("8180",  "TADAWUL",    Interval.in_daily)
+szfz_df  = get_tradingview_data("7040",  "TADAWUL",    Interval.in_daily)
+
+
 
 # ── Assign tickers and rename date → datetime ─────────────────────────────────
 ticker_frames = {
     "AAPL": aapl_df,  "NVDA": nvda_df,  "TSLA": tsla_df,
     "MSFT": msft_df,  "AMD":  amd_df,   "GOOGL": googl_df,
     "AVGO": avgo_df,  "META": meta_df,  "ORCL":  orcl_df,
-    "IBM":  ibm_df,
+    "IBM":  ibm_df, "2300": ttzz_df, "8180":eoez_df, "7040": szfz_df
 }
 
 for ticker, frame in ticker_frames.items():
