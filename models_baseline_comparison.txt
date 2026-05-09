@@ -1,0 +1,47 @@
+Trial and Error 
+
+==================================================
+EVALUATION ON TEST SET - baseline LSTM hidden_size = 64 window_size = 20
+==================================================
+
+  [Price % Change]
+  MAE               : 1.5961%
+  RMSE              : 2.1972%
+  Directional Acc   : 52.85%
+
+  [Volume % Change]
+  MAE               : 53.7373%
+  RMSE              : 77.4234%
+  Directional Acc   : 55.38%
+
+
+==================================================
+EVALUATION ON TEST SET hidden_size = 128 window_size = 30
+==================================================
+
+  [Price % Change]
+  MAE               : 1.6051%
+  RMSE              : 2.2081%
+  Directional Acc   : 55.63%
+
+  [Volume % Change]
+  MAE               : 54.8577%
+  RMSE              : 77.2970%
+  Directional Acc   : 53.70%
+
+
+==================================================
+EVALUATION ON TEST SET hidden_size = 128 seq_size = 40
+==================================================
+
+  [Price % Change]
+  MAE               : 1.6133%
+  RMSE              : 2.2094%
+  Directional Acc   : 55.23%
+
+  [Volume % Change]
+  MAE               : 53.8762%
+  RMSE              : 78.8203%
+  Directional Acc   : 55.39%
+
+
