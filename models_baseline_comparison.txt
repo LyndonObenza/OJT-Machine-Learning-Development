@@ -45,3 +45,22 @@ EVALUATION ON TEST SET hidden_size = 128 seq_size = 40
   Directional Acc   : 55.39%
 
 
+==================================================
+EVALUATION ON TEST SET using TASI hidden_size = 128 seq_size = 30
+==================================================
+
+  [Price % Change]
+  MAE               : 1.6131%
+  RMSE              : 2.2008%
+  Directional Acc   : 58.29%
+
+  [Volume % Change]
+  MAE               : 55.1203%
+  RMSE              : 77.7051%
+  Directional Acc   : 53.14%
+
+Predictions saved: 2110_test_predictions.csv
+
+
+
+

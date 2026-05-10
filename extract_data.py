@@ -125,5 +125,9 @@ for ticker, frame in ticker_frames.items():
     path = f"{ticker}_daily.csv"
     frame.to_csv(path, index=False)
     print(f"Saved: {path}  ({len(frame):,} rows)")
-
-
+    
+# tasi_df = get_tradingview_data("TASI", "TADAWUL", Interval.in_daily)
+# tasi_df["ticker"] = "TASI"
+# tasi_df.rename(columns={"date": "datetime"}, inplace=True)
+# tasi_df.to_csv("tasi_daily.csv", index=False)
+# print(f"Saved: tasi_daily.csv  ({len(tasi_df):,} rows)")
