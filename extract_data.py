@@ -1,3 +1,7 @@
+
+# THIS IS FOR THE DATA NEEDED in the 100+ LSTM models
+
+
 from tvDatafeed import TvDatafeed, Interval
 import pandas as pd
 import numpy as np
@@ -18,30 +22,30 @@ def compute_indicators(data: pd.DataFrame) -> pd.DataFrame:
 
     # --- Trend ---
     data['EMA_10']     = EMAIndicator(close, window=10).ema_indicator()
-    data['EMA_20']     = EMAIndicator(close, window=20).ema_indicator()        # added
-    data['EMA_ratio']  = close / data['EMA_20']                                # added
+    data['EMA_20']     = EMAIndicator(close, window=20).ema_indicator()        
+    data['EMA_ratio']  = close / data['EMA_20']                                
     macd               = MACD(close, window_slow=26, window_fast=12, window_sign=9)
     data['MACD_hist']  = macd.macd_diff()
 
     # --- Momentum ---
     data['RSI_14']     = RSIIndicator(close, window=14).rsi()
     data['ROC_5']      = ROCIndicator(close, window=5).roc()
-    data['ROC_10']     = ROCIndicator(close, window=10).roc()                  # added
-    data['ROC_20']     = ROCIndicator(close, window=20).roc()                  # added
+    data['ROC_10']     = ROCIndicator(close, window=10).roc()                  
+    data['ROC_20']     = ROCIndicator(close, window=20).roc()                  
 
     # --- Volatility ---
     data['ATR_14']      = AverageTrueRange(high, low, close, window=14).average_true_range()
-    data['ATR_ratio']   = data['ATR_14'] / data['ATR_14'].rolling(20).mean()  # added
-    data['realized_vol'] = close.pct_change().rolling(10).std() * 100         # added
+    data['ATR_ratio']   = data['ATR_14'] / data['ATR_14'].rolling(20).mean()  
+    data['realized_vol'] = close.pct_change().rolling(10).std() * 100         
     bb                  = BollingerBands(close, window=20, window_dev=2)
     data['BB_pct']      = bb.bollinger_pband()
 
     # --- Volume ---
     data['OBV']          = OnBalanceVolumeIndicator(close, volume).on_balance_volume()
-    data['OBV_momentum'] = data['OBV'].pct_change(5) * 100                    # added
+    data['OBV_momentum'] = data['OBV'].pct_change(5) * 100                
     data['volume_SMA_20'] = volume.rolling(window=20).mean()
     data['volume_ratio'] = volume / data['volume_SMA_20']
-    data['volume_surge'] = volume / volume.rolling(5).mean()                  # added
+    data['volume_surge'] = volume / volume.rolling(5).mean()                 
     data['MFI_14']       = MFIIndicator(high, low, close, volume, window=14).money_flow_index()
 
     # --- Targets ---
@@ -92,7 +96,7 @@ def get_tradingview_data(symbol: str, exchange: str, tv_interval: Interval):
 #  problem with retrieving  "8270"
 # ── Fetch tickers ─────────────────────────────────────────────────────────────
 ticker_frames   = {}
-tadawul_tickers = ["4348"
+tadawul_tickers = [
     #                "4030", "3092", "4348", "4190", "2222", 
 #                    "7030", "7010", "2050", "2060", "4321", "8100", "2120", "6010", "8250", 
 #                    "8300", "2200", "1060", "1010", "1321", "1180", "2285", "8200", "1050", "1030", 
