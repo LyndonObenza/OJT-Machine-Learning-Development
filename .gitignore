@@ -1,2 +1,7 @@
 *.csv
 /Testing
+/models
+*.pkl
+*.pt
+*.onnx
+*.png

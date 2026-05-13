@@ -1,7 +1,7 @@
 Trial and Error 
 
 ==================================================
-EVALUATION ON TEST SET - baseline LSTM hidden_size = 64 window_size = 20
+EVALUATION ON TEST SET - first training LSTM hidden_size = 64 window_size = 20
 ==================================================
 
   [Price % Change]
@@ -16,7 +16,7 @@ EVALUATION ON TEST SET - baseline LSTM hidden_size = 64 window_size = 20
 
 
 ==================================================
-EVALUATION ON TEST SET hidden_size = 128 window_size = 30
+EVALUATION ON TEST SET second trainig hidden_size = 128 window_size = 30
 ==================================================
 
   [Price % Change]
@@ -31,7 +31,7 @@ EVALUATION ON TEST SET hidden_size = 128 window_size = 30
 
 
 ==================================================
-EVALUATION ON TEST SET hidden_size = 128 seq_size = 40
+EVALUATION ON TEST SET third training hidden_size = 128 seq_size = 40
 ==================================================
 
   [Price % Change]
@@ -59,7 +59,38 @@ EVALUATION ON TEST SET using TASI hidden_size = 128 seq_size = 30
   RMSE              : 77.7051%
   Directional Acc   : 53.14%
 
-Predictions saved: 2110_test_predictions.csv
+
+
+  ====================================================
+
+  BiLSTM
+
+[Price % Change]
+  MAE               : 1.5500%
+  RMSE              : 2.1702%
+  Directional Acc   : 51.43%
+
+  [Volume % Change]
+  MAE               : 52.5700%
+  RMSE              : 79.0469%
+  Directional Acc   : 57.88%
+
+=== Prediction Magnitude ===
+Actual    mean: -0.1852   std: 2.1367
+Predicted mean: -0.0562   std: 0.3103
+
+=== Directional Breakdown ===
+Overall Dir Acc : 51.43%
+When actual UP  : 47.99%  (348 samples)
+When actual DOWN: 53.88%  (490 samples)
+
+=== Prediction Bias ===
+% predicted UP  : 46.90%
+% actual UP     : 41.53%
+
+
+
+
 
 
 

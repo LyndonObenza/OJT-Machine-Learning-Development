@@ -51,16 +51,16 @@ def get_tradingview_data(symbol: str, exchange: str, tv_interval: Interval):
 
 
 # ── Fetch all 10 tickers ──────────────────────────────────────────────────────
-aapl_df  = get_tradingview_data("AAPL",  "NASDAQ", Interval.in_daily)
-nvda_df  = get_tradingview_data("NVDA",  "NASDAQ", Interval.in_daily)
-tsla_df  = get_tradingview_data("TSLA",  "NASDAQ", Interval.in_daily)
-msft_df  = get_tradingview_data("MSFT",  "NASDAQ", Interval.in_daily)
-amd_df   = get_tradingview_data("AMD",   "NASDAQ", Interval.in_daily)
-googl_df = get_tradingview_data("GOOGL", "NASDAQ", Interval.in_daily)
-avgo_df  = get_tradingview_data("AVGO",  "NASDAQ", Interval.in_daily)
-meta_df  = get_tradingview_data("META",  "NASDAQ", Interval.in_daily)
-orcl_df  = get_tradingview_data("ORCL",  "NYSE",   Interval.in_daily)
-ibm_df   = get_tradingview_data("IBM",   "NYSE",   Interval.in_daily)
+# aapl_df  = get_tradingview_data("AAPL",  "NASDAQ", Interval.in_daily)
+# nvda_df  = get_tradingview_data("NVDA",  "NASDAQ", Interval.in_daily)
+# tsla_df  = get_tradingview_data("TSLA",  "NASDAQ", Interval.in_daily)
+# msft_df  = get_tradingview_data("MSFT",  "NASDAQ", Interval.in_daily)
+# amd_df   = get_tradingview_data("AMD",   "NASDAQ", Interval.in_daily)
+# googl_df = get_tradingview_data("GOOGL", "NASDAQ", Interval.in_daily)
+# avgo_df  = get_tradingview_data("AVGO",  "NASDAQ", Interval.in_daily)
+# meta_df  = get_tradingview_data("META",  "NASDAQ", Interval.in_daily)
+# orcl_df  = get_tradingview_data("ORCL",  "NYSE",   Interval.in_daily)
+# ibm_df   = get_tradingview_data("IBM",   "NYSE",   Interval.in_daily)
 ttzz_df  = get_tradingview_data("2300",  "TADAWUL",    Interval.in_daily)
 eoez_df  = get_tradingview_data("8180",  "TADAWUL",    Interval.in_daily)
 szfz_df  = get_tradingview_data("7040",  "TADAWUL",    Interval.in_daily)
@@ -69,10 +69,11 @@ szfz_df  = get_tradingview_data("7040",  "TADAWUL",    Interval.in_daily)
 
 # ── Assign tickers and rename date → datetime ─────────────────────────────────
 ticker_frames = {
-    "AAPL": aapl_df,  "NVDA": nvda_df,  "TSLA": tsla_df,
-    "MSFT": msft_df,  "AMD":  amd_df,   "GOOGL": googl_df,
-    "AVGO": avgo_df,  "META": meta_df,  "ORCL":  orcl_df,
-    "IBM":  ibm_df, "2300": ttzz_df, "8180":eoez_df, "7040": szfz_df
+    # "AAPL": aapl_df,  "NVDA": nvda_df,  "TSLA": tsla_df,
+    # "MSFT": msft_df,  "AMD":  amd_df,   "GOOGL": googl_df,
+    # "AVGO": avgo_df,  "META": meta_df,  "ORCL":  orcl_df,
+    # "IBM":  ibm_df, 
+    "2300": ttzz_df, "8180":eoez_df, "7040": szfz_df
 }
 
 for ticker, frame in ticker_frames.items():
@@ -82,14 +83,14 @@ for ticker, frame in ticker_frames.items():
 
 # ── Save individual CSVs ───────────────────────────────────────────────────────
 for ticker, frame in ticker_frames.items():
-    path = f"{ticker.lower()}_daily.csv"
+    path = f"old_ipynb/{ticker.lower()}_daily.csv"
     frame.to_csv(path, index=False)
     print(f"Saved: {path}  ({len(frame):,} rows)")
 
 # ── Combine and save master CSV ───────────────────────────────────────────────
 df = pd.concat(ticker_frames.values(), ignore_index=True)
 df = df.sort_values(["ticker", "datetime"]).reset_index(drop=True)
-df.to_csv("all_tickers_daily.csv", index=False)
+df.to_csv("all_tickers_daily_old.csv", index=False)
 
 print(f"\nTotal rows : {len(df):,}")
 print(df["ticker"].value_counts())
