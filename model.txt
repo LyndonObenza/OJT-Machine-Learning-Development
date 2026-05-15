@@ -1,0 +1,323 @@
+import optuna
+import torch
+import torch.nn as nn
+import numpy as np
+from torch.utils.data import DataLoader, WeightedRandomSampler
+from sklearn.metrics import balanced_accuracy_score
+
+# done training
+"""
+"8300","1010", "8100","2050", "2060", "1180", "3080", "3090",
+"""
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+
+best_params_all = {}
+
+
+# ── BiLSTM + Attention Model (with LayerNorm) ─────────────────────────────────
+class StockPctChangeBiLSTMAttention(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers, dropout=0.2):
+        super().__init__()
+        self.lstm      = nn.LSTM(input_size, hidden_size, num_layers,
+                                 batch_first=True, bidirectional=True,
+                                 dropout=dropout if num_layers > 1 else 0)
+        # Attention with positional bias — later timesteps are more recent
+        self.attention      = nn.Linear(hidden_size * 2, 1)
+        self.pos_bias       = nn.Parameter(torch.zeros(1))  # learnable recency bias
+        self.ln             = nn.LayerNorm(hidden_size * 2)
+        self.dropout        = nn.Dropout(dropout)
+        self.fc             = nn.Linear(hidden_size * 2, 2)
+        
+        # NEW: direct skip connection from last hidden to output
+        self.skip_fc        = nn.Linear(hidden_size * 2, 2)
+        self.output_blend   = nn.Parameter(torch.tensor(0.5))
+
+    def forward(self, x):
+        lstm_out, _  = self.lstm(x)                  # (B, T, H*2)
+        seq_len      = lstm_out.size(1)
+        
+        # Recency-biased attention
+        pos_weights  = torch.linspace(0, 1, seq_len, device=x.device).unsqueeze(-1)
+        attn_raw     = self.attention(lstm_out) + self.pos_bias * pos_weights
+        attn_weights = torch.softmax(attn_raw, dim=1)
+        context      = (attn_weights * lstm_out).sum(dim=1)
+        
+        out_attn     = self.fc(self.dropout(self.ln(context)))
+        
+        # Skip: use last timestep directly (most recent information)
+        last_hidden  = lstm_out[:, -1, :]
+        out_skip     = self.skip_fc(last_hidden)
+        
+        # Blend — learnable, starts 50/50
+        alpha        = torch.sigmoid(self.output_blend)
+        return alpha * out_attn + (1 - alpha) * out_skip
+
+
+# ── Joint Loss: Huber (magnitude) + Directional + Std-collapse penalty ────────
+class JointPredictionLoss(nn.Module):
+    def __init__(self, alpha=2.0, beta=0.5, gamma=1.0):
+        super().__init__()
+        self.alpha = alpha
+        self.beta  = beta
+        self.gamma = gamma  # NEW: magnitude-confidence penalty
+
+    def forward(self, preds, targets, weights=None):
+        # Huber for magnitude
+        huber = nn.HuberLoss(delta=1.0, reduction="none")(preds, targets).mean(dim=1)
+
+        # Directional loss — wrong sign with MAGNITUDE scaling
+        # A prediction of -0.001 on +2.0 is penalized MORE than -0.001 on +0.1
+        price_sign_loss  = torch.clamp(-preds[:, 0] * targets[:, 0], min=0) * targets[:, 0].abs()
+        volume_sign_loss = torch.clamp(-preds[:, 1] * targets[:, 1], min=0) * targets[:, 1].abs()
+
+        # Variance collapse penalty — directly penalize low prediction variance
+        pred_std  = preds[:, 0].std() + 1e-8
+        tgt_std   = targets[:, 0].std() + 1e-8
+        std_ratio = pred_std / tgt_std
+        # Penalize heavily when std_ratio < 0.3, ease off once > 0.7
+        collapse_loss = torch.clamp(0.5 - std_ratio, min=0) ** 2
+
+        # Bias penalty
+        bias_penalty = preds[:, 0].mean() ** 2   # squared, not abs — smoother gradient
+
+        per_sample = (
+            huber
+            + self.alpha * price_sign_loss
+            + 0.3        * volume_sign_loss
+        )
+        if weights is not None:
+            per_sample = per_sample * weights
+
+        return (
+            per_sample.mean()
+            + self.beta  * std_ratio.reciprocal().clamp(max=10.0)  # NEW: reciprocal penalty
+            + self.gamma * collapse_loss * 5.0
+            + 2.0        * bias_penalty
+        )
+        
+# ── Helpers ───────────────────────────────────────────────────────────────────
+def create_sequences(X, y, seq_len, move_threshold=0.3):
+    Xs, ys, ws = [], [], []
+    for i in range(len(X) - seq_len):
+        Xs.append(X[i : i + seq_len])
+        ys.append(y[i + seq_len])
+        move   = abs(y[i + seq_len, 0])
+        ws.append(1.0 + 2.0 * float(move > move_threshold))
+    return np.array(Xs), np.array(ys), np.array(ws, dtype=np.float32)
+
+
+def make_balanced_sampler(y, oversample_factor=2.0):
+    labels = (y[:, 0] > 0).astype(int)
+    moves  = np.abs(y[:, 0])
+    
+    # Stratify into 4 buckets: UP-small, UP-large, DOWN-small, DOWN-large
+    median_move = np.median(moves)
+    bucket = labels * 2 + (moves > median_move).astype(int)
+    # bucket: 0=DOWN-small, 1=DOWN-large, 2=UP-small, 3=UP-large
+    
+    counts = np.bincount(bucket, minlength=4).astype(float)
+    counts = np.maximum(counts, 1)
+    
+    # Inverse frequency weights, with extra boost on large moves
+    weight_map = 1.0 / counts
+    weight_map[1] *= oversample_factor   # DOWN-large
+    weight_map[3] *= oversample_factor   # UP-large
+    
+    sample_weights = torch.tensor(weight_map[bucket], dtype=torch.float32)
+    return WeightedRandomSampler(sample_weights, len(sample_weights), replacement=True)
+
+
+def safe_corr(a, b):
+    """Pearson r, returns 0.0 on NaN / zero-std edge cases."""
+    if np.std(a) < 1e-8 or np.std(b) < 1e-8:
+        return 0.0
+    r = np.corrcoef(a, b)[0, 1]
+    return 0.0 if np.isnan(r) else float(r)
+
+
+# ── Clean NaN values before Optuna ───────────────────────────────────────────
+print("\nCleaning NaN values from all symbols...")
+for symbol, data in prepared.items():
+    for split in ("train", "val"):
+        X_key, y_key = f"{split}_X_scaled", f"{split}_y_scaled"
+        X, y         = data[X_key], data[y_key]
+        mask         = ~(np.isnan(X).any(axis=1) | np.isnan(y).any(axis=1))
+        before       = len(X)
+        data[X_key]  = X[mask]
+        data[y_key]  = y[mask]
+        print(f"  {symbol} {split}: {before} → {len(data[X_key])} rows")
+
+
+# ── Optuna search ─────────────────────────────────────────────────────────────
+for symbol, data in prepared.items():
+    print(f"\n{'═'*55}")
+    print(f"  Optuna search — {symbol}")
+    print(f"{'═'*55}")
+
+    train_X    = data["train_X_scaled"]
+    train_y    = data["train_y_scaled"]
+    val_X      = data["val_X_scaled"]
+    val_y      = data["val_y_scaled"]
+    input_size = train_X.shape[1]
+
+    def objective(trial):
+        # ── Hyperparameters ───────────────────────────────────────────────────
+        hidden_size = trial.suggest_categorical("hidden_size", [64, 128])
+        num_layers  = trial.suggest_int("num_layers", 2, 3)
+        dropout     = trial.suggest_float("dropout", 0.2, 0.4, step=0.1)
+        lr          = trial.suggest_float("lr", 1e-4, 5e-3, log=True)
+        batch_size  = trial.suggest_categorical("batch_size", [32, 64])
+        seq_len     = trial.suggest_categorical("seq_len", [10, 20, 30, 40])
+        alpha       = trial.suggest_float("alpha", 3.0, 12.0, step=0.5)
+        beta        = trial.suggest_float("beta",  0.3, 1.0, step=0.1)
+        move_threshold = trial.suggest_float("move_threshold", 0.2, 0.5, step=0.1)
+
+        # ── Sequences (now returns weights) ───────────────────────────────────
+        X_tr, y_tr, w_tr = create_sequences(train_X, train_y, seq_len, move_threshold)
+        X_vl, y_vl, _    = create_sequences(val_X,   val_y,   seq_len, move_threshold)
+
+        sampler  = make_balanced_sampler(y_tr)
+        train_ld = DataLoader(
+            TadawulDataset(X_tr, y_tr, w_tr),
+            batch_size=batch_size,
+            sampler=sampler,
+            drop_last=True
+        )
+        val_ld = DataLoader(
+            TadawulDataset(X_vl, y_vl),          # no weights needed for val
+            batch_size=batch_size,
+            shuffle=False,
+            drop_last=False
+        )
+
+        # ── Model & optimiser ─────────────────────────────────────────────────
+        model = StockPctChangeBiLSTMAttention(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            dropout=dropout
+        ).to(device)
+
+        criterion = JointPredictionLoss(alpha=alpha, beta=beta)
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-5)
+        
+
+        EPOCHS         = 30
+        PATIENCE       = 7
+        best_val_score = 0.0
+        patience_ctr   = 0
+
+        for epoch in range(1, EPOCHS + 1):
+            # ── Train ─────────────────────────────────────────────────────────
+            model.train()
+            for X_batch, y_batch, w_batch in train_ld:   # ← unpack 3 items now
+                X_batch = X_batch.to(device)
+                y_batch = y_batch.to(device)
+                w_batch = w_batch.to(device)
+                optimizer.zero_grad()
+                loss = criterion(model(X_batch), y_batch, w_batch)  # ← pass weights
+                loss.backward()
+                nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
+
+            # ── Validate ──────────────────────────────────────────────────────
+            model.eval()
+            all_preds, all_actuals = [], []
+            with torch.no_grad():
+                for X_batch, y_batch, _ in val_ld:        # ← unpack 3 items
+                    all_preds.append(model(X_batch.to(device)).cpu().numpy())
+                    all_actuals.append(y_batch.numpy())
+
+            if len(all_preds) == 0:
+                return 0.0
+
+            val_preds   = np.vstack(all_preds)
+            val_actuals = np.vstack(all_actuals)
+
+            # ── Direction (balanced accuracy) ─────────────────────────────────
+            price_dir = balanced_accuracy_score(
+                np.sign(val_actuals[:, 0]).astype(int),
+                np.sign(val_preds[:, 0]).astype(int)
+            )
+            volume_dir = balanced_accuracy_score(
+                np.sign(val_actuals[:, 1]).astype(int),
+                np.sign(val_preds[:, 1]).astype(int)
+            )
+
+            # ── Magnitude correlation ─────────────────────────────────────────
+            price_corr  = safe_corr(val_actuals[:, 0], val_preds[:, 0])
+            volume_corr = safe_corr(val_actuals[:, 1], val_preds[:, 1])
+
+            # ── Std-ratio penalty ─────────────────────────────────────────────
+            pred_std_ratio = np.std(val_preds[:, 0]) / max(np.std(val_actuals[:, 0]), 1e-6)
+            std_penalty    = abs(1.0 - pred_std_ratio) * 0.2
+
+            # ── Collapse penalty ──────────────────────────────────────────────
+            pred_up_pct      = (val_preds[:, 0] > 0).mean()
+            
+            actual_up_pct    = (val_actuals[:, 0] > 0).mean()
+            bias_gap         = abs(pred_up_pct - actual_up_pct)
+            # Disqualify any trial where the model nearly always predicts one direction
+            if pred_up_pct < 0.15 or pred_up_pct > 0.85:
+                return -1.0   # hard disqualification, not just a penalty
+
+            # Std collapse check — require pred std to be at least 20% of actual std
+            pred_std_ratio = np.std(val_preds[:, 0]) / max(np.std(val_actuals[:, 0]), 1e-6)
+            if pred_std_ratio < 0.20:
+                return -1.0   # also disqualify
+
+            val_score = (
+                0.40 * price_dir             +
+                0.20 * volume_dir            +
+                0.25 * max(price_corr, 0.0)  +
+                0.15 * max(volume_corr, 0.0) -
+                abs(1.0 - pred_std_ratio) * 0.3  -
+                bias_gap * 3.0               # increased weight
+            )
+            trial.report(val_score, epoch)
+            if trial.should_prune():
+                raise optuna.exceptions.TrialPruned()
+
+            if val_score > best_val_score:
+                best_val_score = val_score
+                patience_ctr   = 0
+            else:
+                patience_ctr += 1
+                if patience_ctr >= PATIENCE:
+                    break
+
+        return best_val_score
+
+    # ── Run ───────────────────────────────────────────────────────────────────
+    study = optuna.create_study(
+        direction="maximize",
+        sampler=optuna.samplers.TPESampler(seed=42),
+        pruner=optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=5),
+        study_name=f"bilstm_attention_{symbol}"
+    )
+    study.optimize(objective, n_trials=50, timeout=3600)
+
+    best_params_all[symbol] = study.best_params
+
+    # ── Results ───────────────────────────────────────────────────────────────
+    print(f"\n  Best joint score : {study.best_value:.4f}")
+    print(f"  Best trial       : {study.best_trial.number}")
+    print(f"  Best params:")
+    for k, v in study.best_params.items():
+        print(f"    {k:15s} : {v}")
+
+    print(f"\n  Top 5 Trials:")
+    trials_df = study.trials_dataframe().sort_values("value", ascending=False).head()
+    cols = [
+        "number", "value",
+        "params_hidden_size", "params_num_layers", "params_dropout",
+        "params_lr", "params_batch_size", "params_seq_len",
+        "params_alpha", "params_beta", "params_move_threshold",
+    ]
+    print(trials_df[[c for c in cols if c in trials_df.columns]])
+
+    print(f"\n── Optuna done for {len(best_params_all)} symbols ──")
+    print(trials_df[[c for c in cols if c in trials_df.columns]])
+
+    print(f"\n── Optuna done for {len(best_params_all)} symbols ──")
