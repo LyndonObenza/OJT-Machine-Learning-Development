@@ -1,3 +1,6 @@
+
+Company 3090
+------------------------
 import optuna
 import torch
 import torch.nn as nn
@@ -27,10 +30,10 @@ class StockPctChangeBiLSTMAttention(nn.Module):
         self.pos_bias       = nn.Parameter(torch.zeros(1))  # learnable recency bias
         self.ln             = nn.LayerNorm(hidden_size * 2)
         self.dropout        = nn.Dropout(dropout)
-        self.fc             = nn.Linear(hidden_size * 2, 2)
+        self.fc             = nn.Linear(hidden_size * 2, 4)
         
         # NEW: direct skip connection from last hidden to output
-        self.skip_fc        = nn.Linear(hidden_size * 2, 2)
+        self.skip_fc        = nn.Linear(hidden_size * 2, 4)
         self.output_blend   = nn.Parameter(torch.tensor(0.5))
 
     def forward(self, x):
@@ -70,7 +73,8 @@ class JointPredictionLoss(nn.Module):
         # A prediction of -0.001 on +2.0 is penalized MORE than -0.001 on +0.1
         price_sign_loss  = torch.clamp(-preds[:, 0] * targets[:, 0], min=0) * targets[:, 0].abs()
         volume_sign_loss = torch.clamp(-preds[:, 1] * targets[:, 1], min=0) * targets[:, 1].abs()
-
+        high_sign_loss = torch.clamp(-preds[:, 2] * targets[:, 2], min=0) * targets[:,2].abs()
+        low_sign_loss  = torch.clamp(-preds[:, 3] * targets[:, 3], min=0) * targets[:,3].abs()
         # Variance collapse penalty — directly penalize low prediction variance
         pred_std  = preds[:, 0].std() + 1e-8
         tgt_std   = targets[:, 0].std() + 1e-8
@@ -85,6 +89,8 @@ class JointPredictionLoss(nn.Module):
             huber
             + self.alpha * price_sign_loss
             + 0.3        * volume_sign_loss
+            + 0.1        * high_sign_loss
+            + 0.1        * low_sign_loss
         )
         if weights is not None:
             per_sample = per_sample * weights
@@ -254,18 +260,16 @@ for symbol, data in prepared.items():
             std_penalty    = abs(1.0 - pred_std_ratio) * 0.2
 
             # ── Collapse penalty ──────────────────────────────────────────────
-            pred_up_pct      = (val_preds[:, 0] > 0).mean()
+            pred_up_pct   = (val_preds[:, 0] > 0).mean()
+            actual_up_pct = (val_actuals[:, 0] > 0).mean()
+            bias_gap      = abs(pred_up_pct - actual_up_pct)
             
-            actual_up_pct    = (val_actuals[:, 0] > 0).mean()
-            bias_gap         = abs(pred_up_pct - actual_up_pct)
-            # Disqualify any trial where the model nearly always predicts one direction
-            if pred_up_pct < 0.15 or pred_up_pct > 0.85:
-                return -1.0   # hard disqualification, not just a penalty
-
-            # Std collapse check — require pred std to be at least 20% of actual std
             pred_std_ratio = np.std(val_preds[:, 0]) / max(np.std(val_actuals[:, 0]), 1e-6)
-            if pred_std_ratio < 0.20:
-                return -1.0   # also disqualify
+            if epoch >= 5:
+                if pred_up_pct < 0.15 or pred_up_pct > 0.85:
+                    return -1.0
+                if pred_std_ratio < 0.20:
+                    return -1.0
 
             val_score = (
                 0.40 * price_dir             +
@@ -321,3 +325,6 @@ for symbol, data in prepared.items():
     print(trials_df[[c for c in cols if c in trials_df.columns]])
 
     print(f"\n── Optuna done for {len(best_params_all)} symbols ──")
+
+
+--------------------------
