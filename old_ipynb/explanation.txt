@@ -1,0 +1,109 @@
+NASDAQ STOCK TREND PREDICTION — PROJECT EXPLANATION
+====================================================
+Date: 2026-06-08
+
+
+WHAT WE ARE BUILDING
+--------------------
+A Transformer-based binary classifier that predicts the PSAR (Parabolic SAR)
+trend STATE at t+1, t+2, t+3, and t+4 trading days ahead.
+
+Target stocks: NASDAQ (AAPL, NVDA, TSLA, MSFT, AMD, GOOGL, AVGO, META, ORCL, IBM)
+Model: StockTrendTransformer (Transformer encoder with positional encoding)
+Train period: oldest available data up to 2018-12-31 (strict cutoff)
+Test period: 2019-01-01 onwards (out-of-sample only)
+No data leakage: StandardScaler fit on train only; targets computed from future bars
+  but only used as labels, never as input features.
+
+
+PSAR TREND DEFINITION
+---------------------
+  If Close > PSAR → Trend = 1 (Rising / Bullish)
+  If Close < PSAR → Trend = 0 (Falling / Bearish)
+
+PSAR (Parabolic SAR) is a trailing stop indicator. It stays on one side of
+price until price crosses it, at which point it resets on the other side.
+Flips are rare — only ~8% of trading days see a PSAR reversal (91% persistence).
+
+
+PREDICTION TARGETS
+------------------
+For each bar at time t, predict PSAR trend STATE at each forward horizon:
+
+  target_t1 = 1 if close[t+1] > psar[t+1]  (trend UP tomorrow?)
+  target_t2 = 1 if close[t+2] > psar[t+2]  (trend UP in 2 days?)
+  target_t3 = 1 if close[t+3] > psar[t+3]
+  target_t4 = 1 if close[t+4] > psar[t+4]
+
+A 0.3% distance threshold filters ambiguous bars (price nearly equal to PSAR).
+These ambiguous rows are dropped via dropna().
+
+This is directly useful for backtesting:
+  - prob_t1 > 0.7 → high confidence bullish tomorrow → enter/hold long
+  - prob_t1 < 0.3 → high confidence bearish tomorrow → exit/short
+  - 0.3–0.7 → uncertain → stay flat or reduce size
+
+
+KNOWN LIMITATION — ACCURACY METRIC IS MISLEADING
+-------------------------------------------------
+PSAR stays in the same state 91% of days. A naive model that always predicts
+"same as today" achieves 90.9% accuracy — higher than our model's 85.9%.
+
+This does NOT mean the model is useless. It means:
+  - Accuracy is the wrong metric for this target
+  - AUC = 0.921 at t+1 is the correct signal — shows strong ranking ability
+  - Evaluate using AUC, precision/recall, and high-confidence predictions only
+  - For backtesting: filter to predictions above 0.7 or below 0.3 threshold
+
+
+FEATURES (28 total — input to model)
+--------------------------------------
+Category          Features
+---------         --------
+Range/Returns     hl_range_pct, close_pct_change, return_5, volatility_10
+Trend             trend (current PSAR state), ma_200_percent
+Momentum          rsi, rsi_slope, rsi_divergence, macd_histogram, macd_hist_slope
+Volatility/ATR    ATR_percent, upper_wick_atr, lower_wick_atr
+Bollinger Bands   bb_position, bb_width
+ADX               adx, adx_slope
+PSAR              close_minus_psar, psar_distance_pct
+EMA               close_minus_ema
+Volume            volume_ratio
+Candle structure  upper_wick_ratio, lower_wick_ratio, body_ratio
+Swing detection   bars_since_swing_high, bars_since_swing_low, fractal_swing_phase
+
+
+MODEL ARCHITECTURE
+------------------
+  Input:  (batch, 30 bars, 28 features)
+  → Linear projection to d_model
+  → Positional Encoding
+  → Transformer Encoder (N layers, multi-head attention)
+  → Pooling (last / mean / CLS token — Optuna picks best)
+  → BatchNorm → Dropout
+  → Linear(d_model, 4)  ← 4 outputs for target_t1..t4
+  Output: (batch, 4) logits → sigmoid → probability of PSAR bullish state
+
+Loss: BCEWithLogitsLoss
+Optimizer: Adam with weight decay
+Scheduler: ReduceLROnPlateau
+Tuning: Optuna (50 trials, minimizing val loss)
+
+
+FILES
+-----
+old_data_columns.py     — fetch OHLCV, compute 28 features + target_t1..t4, save CSVs
+Training_old copy.ipynb — train Transformer on PSAR state targets
+onnx_save_old.ipynb     — export trained .pth to .onnx
+inference.py            — run ONNX on latest 30 bars → predict t+1..t+4 PSAR state
+inference2flip.py       — batch inference 2019-2026, full eval + flip-bar analysis
+
+
+SUCCESS CRITERIA
+----------------
+Model is considered useful if:
+  - AUC > 0.85 at t+1 (strong separation of bullish vs bearish)
+  - AUC degrades gracefully: t+1 > t+2 > t+3 > t+4
+  - Pred↑% ≈ True↑% (well-calibrated, no collapse)
+  - High-confidence predictions (prob > 0.7 or < 0.3) are directionally correct
+    in backtesting at a rate better than naive persistence
