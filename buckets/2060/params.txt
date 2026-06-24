@@ -1,0 +1,13 @@
+Best joint score : 0.1914
+  Best trial       : 35
+  Best params:
+    hidden_size     : 64
+    num_layers      : 3
+    dropout         : 0.30000000000000004
+    lr              : 0.0027600111223192413
+    batch_size      : 32
+    seq_len         : 30
+    alpha           : 5.0
+    beta            : 0.8
+    move_threshold  : 1.7000000000000002
+    gamma           : 2.0

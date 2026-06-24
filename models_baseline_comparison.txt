@@ -1,97 +1,113 @@
-Trial and Error 
-
 ==================================================
-EVALUATION ON TEST SET - first training LSTM hidden_size = 64 window_size = 20
+EVALUATION ON TEST SET
 ==================================================
 
-  [Price % Change]
-  MAE               : 1.5961%
-  RMSE              : 2.1972%
-  Directional Acc   : 52.85%
+═══════════════════════════════════════════════════════
+  Evaluating — NVDA
+═══════════════════════════════════════════════════════
 
-  [Volume % Change]
-  MAE               : 53.7373%
-  RMSE              : 77.4234%
-  Directional Acc   : 55.38%
+  [Price 5d % Change]
+  MAE             : 6.0923%
+  RMSE            : 7.9913%
+  Pearson r       : 0.0487
+  Pred std        : 4.6856  Actual std: 6.6656
+  Within ±1%      : 10.0%
+  Within ±2%      : 23.1%
+  Directional Acc : 52.53%
 
+  Predictions saved: models/NVDA/NVDA_test_predictions.csv
 
-==================================================
-EVALUATION ON TEST SET second trainig hidden_size = 128 window_size = 30
-==================================================
+═══════════════════════════════════════════════════════
+  Evaluating — AAPL
+═══════════════════════════════════════════════════════
 
-  [Price % Change]
-  MAE               : 1.6051%
-  RMSE              : 2.2081%
-  Directional Acc   : 55.63%
+  [Price 5d % Change]
+  MAE             : 3.9697%
+  RMSE            : 5.1693%
+  Pearson r       : 0.0543
+  Pred std        : 3.4806  Actual std: 4.0116
+  Within ±1%      : 17.3%
+  Within ±2%      : 32.5%
+  Directional Acc : 53.29%
 
-  [Volume % Change]
-  MAE               : 54.8577%
-  RMSE              : 77.2970%
-  Directional Acc   : 53.70%
+  Predictions saved: models/AAPL/AAPL_test_predictions.csv
 
+═══════════════════════════════════════════════════════
+  Evaluating — TSLA
+═══════════════════════════════════════════════════════
 
-==================================================
-EVALUATION ON TEST SET third training hidden_size = 128 seq_size = 40
-==================================================
+  [Price 5d % Change]
+  MAE             : 9.0645%
+  RMSE            : 11.7941%
+  Pearson r       : -0.0271
+  Pred std        : 7.0006  Actual std: 9.3005
+  Within ±1%      : 7.0%
+  Within ±2%      : 14.1%
+  Directional Acc : 47.99%
 
-  [Price % Change]
-  MAE               : 1.6133%
-  RMSE              : 2.2094%
-  Directional Acc   : 55.23%
+  Predictions saved: models/TSLA/TSLA_test_predictions.csv
 
-  [Volume % Change]
-  MAE               : 53.8762%
-  RMSE              : 78.8203%
-  Directional Acc   : 55.39%
-
-
-==================================================
-EVALUATION ON TEST SET using TASI hidden_size = 128 seq_size = 30
-==================================================
-
-  [Price % Change]
-  MAE               : 1.6131%
-  RMSE              : 2.2008%
-  Directional Acc   : 58.29%
-
-  [Volume % Change]
-  MAE               : 55.1203%
-  RMSE              : 77.7051%
-  Directional Acc   : 53.14%
+── Evaluation done for 3 symbols ──
 
 
+═══════════════════════════════════════════════════════
+  NVDA — Honest Model Baseline
+═══════════════════════════════════════════════════════
+  Actual    mean : 1.3332   std: 6.6675
+  Predicted mean : 0.6137   std: 4.6868
 
-  ====================================================
+  Overall Dir Acc : 52.53%
+  When actual UP  : 56.88%  (1083 samples)
+  When actual DOWN: 46.30%  (756 samples)
 
-  BiLSTM
+  % predicted UP  : 55.57%
+  % actual UP     : 58.89%
 
-[Price % Change]
-  MAE               : 1.5500%
-  RMSE              : 2.1702%
-  Directional Acc   : 51.43%
+  Dir Acc by Move Size:
+       <0.5% moves : 51.16%  (129 samples)
+      0.5-1% moves : 47.97%  (123 samples)
+        1-2% moves : 48.37%  (215 samples)
+        2-5% moves : 57.21%  (610 samples)
+         >5% moves : 50.92%  (762 samples)
 
-  [Volume % Change]
-  MAE               : 52.5700%
-  RMSE              : 79.0469%
-  Directional Acc   : 57.88%
+═══════════════════════════════════════════════════════
+  AAPL — Honest Model Baseline
+═══════════════════════════════════════════════════════
+  Actual    mean : 0.6229   std: 4.0127
+  Predicted mean : 0.4491   std: 3.4815
 
-=== Prediction Magnitude ===
-Actual    mean: -0.1852   std: 2.1367
-Predicted mean: -0.0562   std: 0.3103
+  Overall Dir Acc : 53.29%
+  When actual UP  : 56.94%  (1073 samples)
+  When actual DOWN: 48.17%  (766 samples)
 
-=== Directional Breakdown ===
-Overall Dir Acc : 51.43%
-When actual UP  : 47.99%  (348 samples)
-When actual DOWN: 53.88%  (490 samples)
+  % predicted UP  : 54.81%
+  % actual UP     : 58.35%
 
-=== Prediction Bias ===
-% predicted UP  : 46.90%
-% actual UP     : 41.53%
+  Dir Acc by Move Size:
+       <0.5% moves : 48.83%  (213 samples)
+      0.5-1% moves : 54.17%  (168 samples)
+        1-2% moves : 52.22%  (383 samples)
+        2-5% moves : 54.59%  (740 samples)
+         >5% moves : 54.03%  (335 samples)
 
+═══════════════════════════════════════════════════════
+  TSLA — Honest Model Baseline
+═══════════════════════════════════════════════════════
+  Actual    mean : 1.2827   std: 9.3031
+  Predicted mean : 1.0267   std: 7.0026
 
+  Overall Dir Acc : 47.99%
+  When actual UP  : 53.19%  (957 samples)
+  When actual DOWN: 42.23%  (862 samples)
 
+  % predicted UP  : 55.36%
+  % actual UP     : 52.61%
 
+  Dir Acc by Move Size:
+       <0.5% moves : 57.14%  (98 samples)
+      0.5-1% moves : 46.51%  (86 samples)
+        1-2% moves : 42.64%  (197 samples)
+        2-5% moves : 49.90%  (509 samples)
+         >5% moves : 47.26%  (929 samples)
 
-
-
-
+── Diagnostics done for 3 symbols ──

@@ -1,0 +1,15 @@
+{
+  "best_params": {
+    "hidden_size": 64,
+    "num_layers": 2,
+    "dropout": 0.2,
+    "lr": 0.003768554786624866,
+    "batch_size": 32,
+    "seq_len": 20,
+    "alpha": 12.0,
+    "beta": 0.8,
+    "move_threshold": 0.7,
+    "gamma": 1.5
+  },
+  "best_value": 0.1374049736475135
+}
