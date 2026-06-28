@@ -197,6 +197,8 @@ TICKER_EXCHANGE = {
     "AMD":  "NASDAQ",
     "ASML":  "NASDAQ",
     "LRCX":  "NASDAQ",
+    "QQQ": "NASDAQ",
+    "SPY":"AMEX",
     
 }
 
